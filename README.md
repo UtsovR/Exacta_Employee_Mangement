@@ -1,0 +1,3 @@
+# Exacta_Employee_Mangement
+Full-stack employee break, attendance, and leave tracker with role-based workflows, realtime updates, and admin reporting.
+Exacta Break Tracker is a full-stack workforce operations platform for managing employee breaks, attendance, leaves, notifications, and support tickets. It provides separate admin and employee experiences, secure JWT-based authentication, and realtime status updates through Socket.IO. The frontend is built with React + Vite + Tailwind, the backend with Express + Prisma, and attendance/leave/audit records are integrated with Supabase via backend APIs.
