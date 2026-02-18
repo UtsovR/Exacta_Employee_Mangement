@@ -1,0 +1,71 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  empId     String   @unique // Employee ID used for login
+  password  String
+  name      String
+  email     String?  @unique
+  profilePhoto String? // Base64 or URL
+  role      String   // "ADMIN", "EMPLOYEE"
+  team      String?  // "DEVELOPMENT", "CALLER" - Nullable for Admin
+  currentStatus String @default("WORKING") // "WORKING", "ON_BREAK", "LUNCH", "BREAK_OVERDUE"
+  isActive  Boolean  @default(true)
+  joiningDate DateTime @default(now())
+  dob         DateTime?
+  bloodGroup  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  breakLogs     BreakLog[]
+  notifications Notification[]
+  tickets       SupportTicket[]
+}
+
+model BreakLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  type      String   // "LUNCH", "BREAK"
+  status    String   // "ACTIVE", "COMPLETED", "FORCED_END"
+  startTime DateTime @default(now())
+  endTime   DateTime?
+  duration  Int?     // Duration in minutes, calculated on completion
+  date      DateTime @default(now()) // To easily query daily logs
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  type      String   // "INFO", "ALERT", "SUCCESS", "LEAVE"
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model SupportTicket {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  subject   String
+  message   String
+  status    String   @default("OPEN") // "OPEN", "IN_PROGRESS", "CLOSED"
+  priority  String   @default("NORMAL") // "LOW", "NORMAL", "HIGH"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Setting {
+  id    Int    @id @default(autoincrement())
+  key   String @unique
+  value String // JSON string
+}

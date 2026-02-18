@@ -1,0 +1,20 @@
+{
+    "name": "exacta-break-tracker-root",
+    "version": "1.0.0",
+    "description": "Root package for Exacta Break Tracker",
+    "private": true,
+    "scripts": {
+        "setup": "concurrently \"npm install --prefix server\" \"npm install --prefix client\"",
+        "predev": "node scripts/kill-ports.js",
+        "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+        "start": "npm run dev",
+        "seed": "npm run seed --prefix server",
+        "build": "npm run build --prefix client"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2"
+    },
+    "dependencies": {
+        "@supabase/supabase-js": "^2.95.3"
+    }
+}
