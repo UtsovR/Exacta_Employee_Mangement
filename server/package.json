@@ -9,6 +9,7 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "seed": "node prisma/seed.js",
+    "verify:admin-flow": "node scripts/verify-admin-flow.js",
     "test:imports": "node test-import.js",
     "test:smoke": "node test-api-smoke.js"
   },

@@ -8,16 +8,26 @@ const AuthContext = createContext(null);
 const cloneDefaultOfficeConfig = () =>
     JSON.parse(JSON.stringify(DEFAULT_OFFICE_CONFIG));
 
+const normalizeRole = (role) => {
+    if (!role || typeof role !== 'string') {
+        return 'EMPLOYEE';
+    }
+
+    const normalized = role.trim().toUpperCase();
+    return normalized || 'EMPLOYEE';
+};
+
 const buildUserFromAuth = (authUser, profile = null) => {
     const metadata = authUser?.user_metadata || {};
     const email = authUser?.email || profile?.email || null;
+    const resolvedRole = normalizeRole(profile?.role || metadata.role);
 
     return {
         ...profile,
         id: authUser?.id || profile?.id || null,
         email,
         name: profile?.name || metadata.name || email || 'User',
-        role: profile?.role || metadata.role || 'EMPLOYEE',
+        role: resolvedRole,
         team: profile?.team || metadata.team || null,
         empId:
             profile?.emp_id ||

@@ -2,10 +2,19 @@ const jwt = require('jsonwebtoken');
 const prisma = require('../prisma');
 const { supabaseAdmin } = require('../lib/supabase');
 
+const normalizeRole = (role) => {
+    if (!role || typeof role !== 'string') {
+        return null;
+    }
+
+    const normalized = role.trim().toUpperCase();
+    return normalized || null;
+};
+
 const getPrismaUserFromSupabaseUser = async (supabaseUser) => {
     const email = supabaseUser?.email || null;
     const metadata = supabaseUser?.user_metadata || {};
-    const fallbackEmpId =
+    const fallbackEmpIdRaw =
         metadata.empId ||
         metadata.employeeId ||
         metadata.emp_id ||
@@ -22,11 +31,20 @@ const getPrismaUserFromSupabaseUser = async (supabaseUser) => {
         }
     }
 
-    if (fallbackEmpId) {
-        return prisma.user.findUnique({
-            where: { empId: fallbackEmpId },
-            select: { id: true, empId: true, role: true, name: true, email: true, team: true },
-        });
+    if (fallbackEmpIdRaw) {
+        const fallbackEmpId = String(fallbackEmpIdRaw).trim();
+        const candidates = [...new Set([fallbackEmpId, fallbackEmpId.toUpperCase()])];
+
+        for (const empId of candidates) {
+            const user = await prisma.user.findUnique({
+                where: { empId },
+                select: { id: true, empId: true, role: true, name: true, email: true, team: true },
+            });
+
+            if (user) {
+                return user;
+            }
+        }
     }
 
     return null;
@@ -51,6 +69,7 @@ exports.protect = async (req, res, next) => {
                 decoded.empId = user.empId;
             }
         }
+        decoded.role = normalizeRole(decoded.role);
 
         req.user = decoded;
         return next();
@@ -71,7 +90,7 @@ exports.protect = async (req, res, next) => {
             req.user = {
                 id: mappedUser.id,
                 empId: mappedUser.empId,
-                role: mappedUser.role,
+                role: normalizeRole(mappedUser.role),
                 name: mappedUser.name,
                 email: mappedUser.email,
                 team: mappedUser.team,
@@ -87,7 +106,7 @@ exports.protect = async (req, res, next) => {
 };
 
 exports.admin = (req, res, next) => {
-    if (req.user && req.user.role === 'ADMIN') {
+    if (req.user && normalizeRole(req.user.role) === 'ADMIN') {
         return next();
     }
 
