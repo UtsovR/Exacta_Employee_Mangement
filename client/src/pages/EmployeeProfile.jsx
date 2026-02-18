@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { User, Calendar, CreditCard, Mail, MapPin, Hash, Camera, Upload } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { apiRequest } from '@/lib/api';
+import { supabase } from '@/lib/supabaseClient';
 import Toast from '@/components/ui/Toast';
 
 const ProfileField = ({ icon: Icon, label, value }) => (
@@ -17,7 +17,7 @@ const ProfileField = ({ icon: Icon, label, value }) => (
 );
 
 const EmployeeProfile = () => {
-    const { user, refreshUser, token } = useAuth();
+    const { user, refreshUser } = useAuth();
     const fileInputRef = useRef(null);
     const [uploading, setUploading] = useState(false);
     const [toast, setToast] = useState(null);
@@ -41,11 +41,14 @@ const EmployeeProfile = () => {
         reader.onloadend = async () => {
             setUploading(true);
             try {
-                await apiRequest('/api/auth/profile', {
-                    method: 'PUT',
-                    token,
-                    body: { profilePhoto: reader.result },
+                const { error } = await supabase.auth.updateUser({
+                    data: { profilePhoto: reader.result },
                 });
+
+                if (error) {
+                    throw error;
+                }
+
                 await refreshUser();
                 setToast({ message: 'Profile photo updated!', type: 'success' });
             } catch (error) {

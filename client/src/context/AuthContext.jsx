@@ -1,11 +1,42 @@
 import { createContext, useState, useEffect, useContext, useCallback } from 'react';
 import { apiRequest } from '@/lib/api';
+import { supabase } from '@/lib/supabaseClient';
 import { DEFAULT_OFFICE_CONFIG } from '@/constants/config';
 
 const AuthContext = createContext(null);
 
 const cloneDefaultOfficeConfig = () =>
     JSON.parse(JSON.stringify(DEFAULT_OFFICE_CONFIG));
+
+const buildUserFromAuth = (authUser, profile = null) => {
+    const metadata = authUser?.user_metadata || {};
+    const email = authUser?.email || profile?.email || null;
+
+    return {
+        ...profile,
+        id: authUser?.id || profile?.id || null,
+        email,
+        name: profile?.name || metadata.name || email || 'User',
+        role: profile?.role || metadata.role || 'EMPLOYEE',
+        team: profile?.team || metadata.team || null,
+        empId:
+            profile?.emp_id ||
+            profile?.empId ||
+            metadata.empId ||
+            metadata.employeeId ||
+            authUser?.id ||
+            null,
+        profilePhoto:
+            profile?.profilePhoto ||
+            profile?.profile_photo ||
+            metadata.profilePhoto ||
+            metadata.profile_photo ||
+            null,
+        joiningDate: profile?.joiningDate || profile?.joining_date || null,
+        dob: profile?.dob || null,
+        bloodGroup: profile?.bloodGroup || profile?.blood_group || null,
+    };
+};
 
 export const useAuth = () => {
     const context = useContext(AuthContext);
@@ -17,49 +48,123 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
-    const [token, setToken] = useState(null);
+    const [session, setSession] = useState(null);
     const [officeConfig, setOfficeConfig] = useState(cloneDefaultOfficeConfig());
     const [loading, setLoading] = useState(true);
 
-    const isAuthenticated = !!user && !!token;
+    const token = session?.access_token || null;
+    const isAuthenticated = !!session;
 
-    const refreshSettings = useCallback(async (tokenOverride) => {
-        const activeToken = tokenOverride || localStorage.getItem('token');
-        if (!activeToken) {
-            setOfficeConfig(cloneDefaultOfficeConfig());
-            return;
+    const hydrateUser = useCallback(async (nextSession) => {
+        const authUser = nextSession?.user;
+        if (!authUser) {
+            return null;
         }
 
         try {
-            const data = await apiRequest('/api/settings', { token: activeToken });
-            if (data?.OFFICE_CONFIG) {
-                setOfficeConfig(data.OFFICE_CONFIG);
-            } else {
+            const { data: profile, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', authUser.id)
+                .maybeSingle();
+
+            if (error) {
+                console.error('Failed to load profile from Supabase:', error);
+                return buildUserFromAuth(authUser);
+            }
+
+            return buildUserFromAuth(authUser, profile);
+        } catch (error) {
+            console.error('Failed to load profile from Supabase:', error);
+            return buildUserFromAuth(authUser);
+        }
+    }, []);
+
+    const refreshSettings = useCallback(
+        async (tokenOverride) => {
+            const activeToken = tokenOverride || session?.access_token;
+            if (!activeToken) {
+                setOfficeConfig(cloneDefaultOfficeConfig());
+                return;
+            }
+
+            try {
+                const data = await apiRequest('/api/settings', { token: activeToken });
+                if (data?.OFFICE_CONFIG) {
+                    setOfficeConfig(data.OFFICE_CONFIG);
+                } else {
+                    setOfficeConfig(cloneDefaultOfficeConfig());
+                }
+            } catch (error) {
+                console.error('Failed to refresh office config:', error);
                 setOfficeConfig(cloneDefaultOfficeConfig());
             }
-        } catch (error) {
-            console.error('Failed to refresh office config:', error);
-            setOfficeConfig(cloneDefaultOfficeConfig());
-        }
-    }, []);
+        },
+        [session]
+    );
+
+    const syncSessionState = useCallback(
+        async (nextSession) => {
+            setSession(nextSession || null);
+
+            if (!nextSession) {
+                setUser(null);
+                setOfficeConfig(cloneDefaultOfficeConfig());
+                return;
+            }
+
+            const nextUser = await hydrateUser(nextSession);
+            setUser(nextUser);
+        },
+        [hydrateUser]
+    );
 
     useEffect(() => {
-        try {
-            const savedToken = localStorage.getItem('token');
-            const savedUser = localStorage.getItem('user');
+        let isActive = true;
 
-            if (savedToken && savedUser) {
-                setToken(savedToken);
-                setUser(JSON.parse(savedUser));
+        const initializeAuth = async () => {
+            try {
+                const { data, error } = await supabase.auth.getSession();
+                if (error) {
+                    console.error('Failed to read Supabase session:', error);
+                }
+
+                if (!isActive) {
+                    return;
+                }
+
+                await syncSessionState(data?.session || null);
+            } catch (error) {
+                console.error('Error initializing auth state:', error);
+                if (isActive) {
+                    setSession(null);
+                    setUser(null);
+                    setOfficeConfig(cloneDefaultOfficeConfig());
+                }
+            } finally {
+                if (isActive) {
+                    setLoading(false);
+                }
             }
-        } catch (error) {
-            console.error('Error restoring auth state:', error);
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+        };
+
+        initializeAuth();
+
+        const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+            if (!isActive) {
+                return;
+            }
+
+            syncSessionState(nextSession).catch((error) => {
+                console.error('Error syncing auth state:', error);
+            });
+        });
+
+        return () => {
+            isActive = false;
+            data.subscription.unsubscribe();
+        };
+    }, [syncSessionState]);
 
     useEffect(() => {
         if (token) {
@@ -70,54 +175,55 @@ export const AuthProvider = ({ children }) => {
     }, [token, refreshSettings]);
 
     const login = useCallback(
-        async (empId, password) => {
-            const data = await apiRequest('/api/auth/login', {
-                method: 'POST',
-                body: { empId, password },
+        async (email, password) => {
+            const { data, error } = await supabase.auth.signInWithPassword({
+                email: email.trim(),
+                password,
             });
 
-            if (!data?.token || !data?.user) {
-                throw new Error('Login response is missing required fields');
+            if (error) {
+                throw new Error(error.message || 'Unable to login. Please try again.');
             }
 
-            localStorage.setItem('token', data.token);
-            localStorage.setItem('user', JSON.stringify(data.user));
-            setUser(data.user);
-            setToken(data.token);
-            await refreshSettings(data.token);
+            const nextSession = data?.session;
+            if (!nextSession?.user) {
+                throw new Error('Login succeeded but no active session was returned.');
+            }
 
-            return data.user;
+            const nextUser = await hydrateUser(nextSession);
+            setSession(nextSession);
+            setUser(nextUser);
+            await refreshSettings(nextSession.access_token);
+
+            return nextUser;
         },
-        [refreshSettings]
+        [hydrateUser, refreshSettings]
     );
 
     const refreshUser = useCallback(async () => {
-        const activeToken = localStorage.getItem('token');
-        if (!activeToken) {
+        if (!session) {
             return null;
         }
 
-        try {
-            const updatedUser = await apiRequest('/api/auth/me', { token: activeToken });
-            localStorage.setItem('user', JSON.stringify(updatedUser));
-            setUser(updatedUser);
-            return updatedUser;
-        } catch (error) {
-            console.error('Failed to refresh user:', error);
-            return null;
-        }
-    }, []);
+        const refreshedUser = await hydrateUser(session);
+        setUser(refreshedUser);
+        return refreshedUser;
+    }, [hydrateUser, session]);
 
-    const logout = useCallback(() => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+    const logout = useCallback(async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            console.error('Failed to logout from Supabase:', error);
+        }
+
+        setSession(null);
         setUser(null);
-        setToken(null);
         setOfficeConfig(cloneDefaultOfficeConfig());
     }, []);
 
     const value = {
         user,
+        session,
         token,
         officeConfig,
         isAuthenticated,
@@ -128,11 +234,7 @@ export const AuthProvider = ({ children }) => {
         refreshSettings,
     };
 
-    return (
-        <AuthContext.Provider value={value}>
-            {!loading && children}
-        </AuthContext.Provider>
-    );
+    return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
 };
 
 export default AuthContext;

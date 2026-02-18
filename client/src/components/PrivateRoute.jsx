@@ -7,7 +7,7 @@ const PrivateRoute = ({ children, roles }) => {
     // Debug logging for troubleshooting
     // console.log("PrivateRoute Check:", { user, isAuthenticated, loading, roles, path: window.location.pathname });
 
-    if (loading) {
+    if (loading || (isAuthenticated && !user)) {
         return (
             <div className="flex items-center justify-center h-screen bg-brand-gray-light text-brand-blue-dark font-bold">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand-blue-DEFAULT mr-3"></div>

@@ -1,31 +1,35 @@
 import { useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Lock, User } from 'lucide-react';
+import { Briefcase, Lock, Mail } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
 import Button from '../components/ui/Button';
 
 const Login = () => {
-    const [empId, setEmpId] = useState('');
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const { login } = useAuth();
     const navigate = useNavigate();
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
         setIsLoading(true);
+
         try {
-            const user = await login(empId, password);
-            if (user.role === 'ADMIN') {
-                navigate('/admin/dashboard');
-            } else {
-                navigate('/employee/dashboard');
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+                email: email.trim(),
+                password,
+            });
+
+            if (signInError) {
+                throw new Error(signInError.message || 'Invalid email or password.');
             }
+
+            navigate('/', { replace: true });
         } catch (err) {
-            console.error('[Login] Login failure:', err.message);
-            setError(err.message || 'Unable to login. Please try again.');
+            console.error('[Login] Login failure:', err);
+            setError(err?.message || 'Unable to login. Please try again.');
         } finally {
             setIsLoading(false);
         }
@@ -50,15 +54,15 @@ const Login = () => {
 
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <label className="block text-sm font-medium text-brand-dark mb-2">Employee ID</label>
+                        <label className="block text-sm font-medium text-brand-dark mb-2">Email</label>
                         <div className="relative">
-                            <User className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-gray-text w-5 h-5" />
+                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-gray-text w-5 h-5" />
                             <input
-                                type="text"
+                                type="email"
                                 className="w-full pl-10 pr-4 py-2 border border-brand-gray-border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue-light focus:border-transparent transition-all"
-                                placeholder="Enter your ID"
-                                value={empId}
-                                onChange={(e) => setEmpId(e.target.value)}
+                                placeholder="you@company.com"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
                                 required
                             />
                         </div>
