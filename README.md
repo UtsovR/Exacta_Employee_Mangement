@@ -3,23 +3,44 @@ Full-stack employee break, attendance, and leave tracker with role-based workflo
 
 ## Stack Overview
 - Frontend: React + Vite + Tailwind
-- Backend: Express + Prisma (SQLite)
+- Backend: Express + Prisma (PostgreSQL)
 - Auth: Supabase Auth (frontend login) + backend token verification
 - Realtime: Socket.IO
 
-Admin routes in frontend are guarded by role (`ADMIN`) and backend admin APIs also enforce `ADMIN` via middleware.
+Admin routes in frontend are guarded by role (`ADMIN`) and backend admin APIs enforce `ADMIN` via middleware.
+
+## Database
+PostgreSQL is the only supported database for this project.
 
 ## Required Environment Variables
 
-### Backend (`.env` at repo root or `server/.env`)
+### Backend (`server/.env` preferred)
+- `DATABASE_URL` (PostgreSQL runtime URL)
 - `JWT_SECRET`
 - `CORS_ORIGIN` (example: `http://localhost:5173`)
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
+- `SEED_ADMIN_PASSWORD` (required for `npm run seed`)
+- `SEED_ADMIN_EMAIL` (optional)
 
 ### Frontend (`client/.env`)
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_ANON_KEY`
+
+## PostgreSQL Local Setup
+
+### Option A: Docker (recommended)
+```powershell
+docker run --name exacta-pg -e POSTGRES_USER=exacta -e POSTGRES_PASSWORD=exacta_pass -e POSTGRES_DB=exacta_bms -p 5432:5432 -d postgres:16
+```
+
+`DATABASE_URL` example:
+```env
+DATABASE_URL="postgresql://exacta:exacta_pass@localhost:5432/exacta_bms?schema=public"
+```
+
+### Option B: Supabase pooler/session connection
+Use the exact DB connection string from Supabase Dashboard -> Settings -> Database.
 
 ## Local Setup
 1. Install dependencies:
@@ -27,16 +48,22 @@ Admin routes in frontend are guarded by role (`ADMIN`) and backend admin APIs al
 npm run setup
 ```
 
-2. Seed local Prisma admin user (required for backend admin guard):
+2. Generate Prisma client:
 ```bash
-SEED_ADMIN_PASSWORD='ChangeMeStrong123!' npm run seed
-```
-PowerShell:
-```powershell
-$env:SEED_ADMIN_PASSWORD='ChangeMeStrong123!'; npm run seed
+npm --prefix server run prisma:generate
 ```
 
-3. Start app:
+3. Apply migrations:
+```bash
+npm --prefix server run prisma:deploy
+```
+
+4. Seed admin user (idempotent):
+```bash
+npm run seed
+```
+
+5. Start app:
 ```bash
 npm run dev
 ```
@@ -46,7 +73,7 @@ npm run dev
 ## Create and Map an Admin Account (Supabase + Prisma)
 Use the same person/account across frontend auth and backend authorization.
 
-1. Ensure local Prisma admin exists (`empId = ADMIN`, `role = ADMIN`) by running seed (above).
+1. Ensure local Prisma admin exists (`empId = ADMIN`, `role = ADMIN`) by running seed.
 
 2. In Supabase Dashboard -> Auth -> Users, create an email/password user for admin.
 
@@ -78,13 +105,13 @@ This mapping ensures:
 
 ### Manual checklist
 1. Start app (`npm run dev`).
-2. Login via frontend `/login` with the Supabase admin email/password.
+2. Login via frontend `/login` with Supabase admin email/password.
 3. Confirm admin UI appears:
-   - Sidebar shows `Employees`, `Reports`, `Settings`.
+   - Sidebar shows admin items.
    - `/admin/dashboard` loads.
-4. Confirm backend admin endpoint works with the same Supabase token (script below).
+4. Confirm backend admin endpoint works with the same Supabase token.
 
-### Scripted check
+### Scripted admin check
 With backend running, execute:
 ```bash
 VERIFY_ADMIN_EMAIL='<ADMIN_EMAIL>' VERIFY_ADMIN_PASSWORD='<ADMIN_PASSWORD>' npm --prefix server run verify:admin-flow

@@ -2,9 +2,10 @@ const path = require('path');
 const dotenv = require('dotenv');
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../.env'), override: true });
 
 const REQUIRED_ENV_VARS = [
+    'DATABASE_URL',
     'JWT_SECRET',
     'CORS_ORIGIN',
     'SUPABASE_URL',

@@ -28,7 +28,6 @@ yarn-error.log*
 *.log
 
 # Local runtime artifacts
-server/prisma/dev.db
 client/build_log*.txt
 client/lint_output.txt
 supabase/.temp/

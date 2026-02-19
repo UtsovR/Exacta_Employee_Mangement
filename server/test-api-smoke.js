@@ -1,5 +1,7 @@
 process.env.DISABLE_SCHEDULER = 'true';
 process.env.PORT = process.env.PORT || '5110';
+process.env.DATABASE_URL =
+    process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/postgres?schema=public';
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test_jwt_secret';
 process.env.CORS_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'https://example.supabase.co';
